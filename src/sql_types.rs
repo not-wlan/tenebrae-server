@@ -35,8 +35,8 @@ pub struct Signature {
     id: i32,
     owner: i32,
     pub signature: String,
-    filehash: String,
-    filename: String,
+    pub filehash: String,
+    pub filename: String,
     state: SignatureState,
     pub name: String,
 }

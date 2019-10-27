@@ -61,6 +61,8 @@ struct TenebraeSearch {
 struct TenebraeResult {
     name: String,
     signature: String,
+    filename: String,
+    filehash: String
 }
 
 impl From<&sql_types::Signature> for TenebraeResult {
@@ -68,6 +70,8 @@ impl From<&sql_types::Signature> for TenebraeResult {
         TenebraeResult {
             name: sig.name.clone(),
             signature: sig.signature.clone(),
+            filename: sig.filename.clone(),
+            filehash: sig.filehash.clone()
         }
     }
 }
