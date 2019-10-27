@@ -5,6 +5,6 @@ CREATE TABLE signatures (
     owner SERIAL REFERENCES signatures(id) NOT NULL,
     signature VARCHAR NOT NULL,
     file VARCHAR,
-    state signature_state,
+    state signature_state NOT NULL,
     name VARCHAR NOT NULL
 )

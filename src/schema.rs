@@ -14,7 +14,7 @@ table! {
         owner -> Int4,
         signature -> Varchar,
         file -> Nullable<Varchar>,
-        state -> Nullable<Signature_state>,
+        state -> Signature_state,
         name -> Varchar,
     }
 }
