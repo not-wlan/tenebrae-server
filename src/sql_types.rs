@@ -1,4 +1,4 @@
-use super::schema::signatures;
+use super::schema::{api_keys, signatures};
 use diesel::{self, prelude::*, PgConnection};
 
 // Thanks to https://atsuzaki.com/blog/diesel-enums/
@@ -11,6 +11,10 @@ pub enum ApiKeyState {
     Enabled,
     #[db_rename = "disabled"]
     Disabled,
+    #[db_rename = "admin"]
+    Admin,
+    #[db_rename = "moderator"]
+    Moderator,
 }
 
 #[PgType = "signature_state"]
@@ -36,6 +40,47 @@ pub struct Signature {
     pub name: String,
 }
 
+#[table_name = "api_keys"]
+#[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset)]
+pub struct ApiKey {
+    id: i32,
+    pub name: String,
+    pub key: String,
+    state: ApiKeyState,
+    message: Option<String>,
+}
+
+impl ApiKey {
+    pub fn new(name: &str, state: ApiKeyState, message: Option<String>) -> Self {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let key = format!("{:x}", rng.gen::<u128>());
+        ApiKey {
+            id: 0,
+            name: name.to_string(),
+            key,
+            state,
+            message,
+        }
+    }
+
+    pub fn count_master_keys(connection: &PgConnection) -> Result<i64, diesel::result::Error> {
+        use super::schema::api_keys::dsl::*;
+        api_keys
+            .filter(state.eq(ApiKeyState::Admin))
+            .count()
+            .get_result(connection)
+    }
+
+    pub fn persist(&self, connection: &PgConnection) -> Result<usize, diesel::result::Error> {
+        use super::schema::api_keys::dsl::*;
+        diesel::insert_into(super::schema::api_keys::table)
+            .values(self)
+            .returning(id)
+            .execute(connection)
+    }
+}
+
 impl Signature {
     /// Returns the total number of all signatures known to tenebrae on success
     pub fn count(connection: &PgConnection) -> Result<i64, diesel::result::Error> {
@@ -58,9 +103,14 @@ impl Signature {
         signatures::table.find(id).first(connection)
     }
 
-    pub fn search(sigs: &[String], connection: &PgConnection) -> Result<Vec<Signature>, diesel::result::Error> {
+    pub fn search(
+        sigs: &[String],
+        connection: &PgConnection,
+    ) -> Result<Vec<Signature>, diesel::result::Error> {
         use super::schema::signatures::dsl::*;
         use diesel::dsl::*;
-        signatures.filter(signature.eq(any(sigs))).load::<Signature>(connection)
+        signatures
+            .filter(signature.eq(any(sigs)))
+            .load::<Signature>(connection)
     }
 }
