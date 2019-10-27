@@ -1,5 +1,5 @@
 CREATE TYPE signature_state AS ENUM ('unverified', 'outdated', 'normal');
-CREATE TYPE api_key_state AS ENUM ('enabled', 'disabled');
+CREATE TYPE api_key_state AS ENUM ('enabled', 'disabled', 'admin', 'moderator');
 
 CREATE TABLE api_keys (
   id SERIAL PRIMARY KEY,
