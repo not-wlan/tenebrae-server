@@ -1,4 +1,7 @@
 table! {
+    use diesel::sql_types::*;
+    use crate::sql_types::*;
+
     api_keys (id) {
         id -> Int4,
         name -> Varchar,
@@ -9,6 +12,9 @@ table! {
 }
 
 table! {
+    use diesel::sql_types::*;
+    use crate::sql_types::*;
+
     signatures (id) {
         id -> Int4,
         owner -> Int4,
@@ -19,7 +25,4 @@ table! {
     }
 }
 
-allow_tables_to_appear_in_same_query!(
-    api_keys,
-    signatures,
-);
+allow_tables_to_appear_in_same_query!(api_keys, signatures,);
