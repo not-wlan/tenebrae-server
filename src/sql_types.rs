@@ -58,7 +58,7 @@ impl Signature {
         signatures::table.find(id).first(connection)
     }
 
-    pub fn search(sigs: &Vec<String>, connection: &PgConnection) -> Result<Vec<Signature>, diesel::result::Error> {
+    pub fn search(sigs: &[String], connection: &PgConnection) -> Result<Vec<Signature>, diesel::result::Error> {
         use super::schema::signatures::dsl::*;
         use diesel::dsl::*;
         signatures.filter(signature.eq(any(sigs))).load::<Signature>(connection)

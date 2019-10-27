@@ -76,7 +76,7 @@ fn search(query: Json<TenebraeSearch>, connection: Connection) -> Result<Json<Te
 
 #[get("/signature/<id>")]
 fn fetch(id: i32, connection: Connection) -> Result<Json<sql_types::Signature>, Status> {
-    sql_types::Signature::fetch(id, &connection).map_err(|_| Status::NotFound).map(|sig| Json(sig))
+    sql_types::Signature::fetch(id, &connection).map_err(|_| Status::NotFound).map(Json)
 }
 
 #[get("/")]
