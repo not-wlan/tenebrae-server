@@ -30,15 +30,37 @@ pub enum SignatureState {
 pub struct Signature {
     id: i32,
     owner: i32,
-    signature: String,
+    pub signature: String,
     file: Option<String>,
     state: SignatureState,
-    name: String,
+    pub name: String,
 }
 
 impl Signature {
+    /// Returns the total number of all signatures known to tenebrae on success
     pub fn count(connection: &PgConnection) -> Result<i64, diesel::result::Error> {
         use super::schema::signatures::dsl::*;
         signatures.count().get_result(connection)
+    }
+
+    /// Persists a Signature to the Database. Returns the new id on success.
+    pub fn persist(&self, connection: &PgConnection) -> Result<usize, diesel::result::Error> {
+        use super::schema::signatures::dsl::*;
+        diesel::insert_into(super::schema::signatures::table)
+            .values(self)
+            .returning(id)
+            .execute(connection)
+    }
+
+    #[cfg(debug_assertions)]
+    /// Fetch a signature directly by id.
+    pub fn fetch(id: i32, connection: &PgConnection) -> Result<Signature, diesel::result::Error> {
+        signatures::table.find(id).first(connection)
+    }
+
+    pub fn search(sigs: &Vec<String>, connection: &PgConnection) -> Result<Vec<Signature>, diesel::result::Error> {
+        use super::schema::signatures::dsl::*;
+        use diesel::dsl::*;
+        signatures.filter(signature.eq(any(sigs))).load::<Signature>(connection)
     }
 }
