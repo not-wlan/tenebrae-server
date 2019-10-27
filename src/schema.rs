@@ -19,7 +19,8 @@ table! {
         id -> Int4,
         owner -> Int4,
         signature -> Varchar,
-        file -> Nullable<Varchar>,
+        filename -> Varchar,
+        filehash -> Varchar,
         state -> Signature_state,
         name -> Varchar,
     }
@@ -27,4 +28,7 @@ table! {
 
 joinable!(signatures -> api_keys (owner));
 
-allow_tables_to_appear_in_same_query!(api_keys, signatures,);
+allow_tables_to_appear_in_same_query!(
+    api_keys,
+    signatures,
+);

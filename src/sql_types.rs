@@ -35,7 +35,8 @@ pub struct Signature {
     id: i32,
     owner: i32,
     pub signature: String,
-    file: Option<String>,
+    filehash: String,
+    filename: String,
     state: SignatureState,
     pub name: String,
 }
@@ -86,14 +87,16 @@ impl Signature {
         owner: i32,
         name: &str,
         signature: &str,
-        file: &Option<String>,
+        filename: &str,
+        filehash: &str,
         state: SignatureState,
     ) -> Self {
         Signature {
             id: 0,
             owner,
             signature: signature.to_string(),
-            file: file.clone(),
+            filename: filename.to_string(),
+            filehash: filehash.to_string(),
             state,
             name: name.to_string(),
         }

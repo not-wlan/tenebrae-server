@@ -48,7 +48,8 @@ impl TenebraeError {
 struct TenebraeAdd {
     name: String,
     signature: String,
-    file: Option<String>,
+    filename: String,
+    filehash: String
 }
 
 #[derive(Serialize, Deserialize)]
@@ -109,7 +110,8 @@ fn add_signature(signature: Json<TenebraeAdd>, connection: Connection) -> Status
         0,
         &signature.name,
         &signature.signature,
-        &signature.file,
+        &signature.filename,
+        &signature.filehash,
         SignatureState::Normal,
     );
     new.persist(&connection)

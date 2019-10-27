@@ -12,7 +12,8 @@ CREATE TABLE signatures (
     id SERIAL PRIMARY KEY,
     owner SERIAL REFERENCES api_keys(id) NOT NULL,
     signature VARCHAR NOT NULL,
-    file VARCHAR,
+    filename VARCHAR NOT NULL,
+    filehash VARCHAR NOT NULL,
     state signature_state NOT NULL,
     name VARCHAR NOT NULL
 );
