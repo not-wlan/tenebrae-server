@@ -82,6 +82,23 @@ impl ApiKey {
 }
 
 impl Signature {
+    pub fn new(
+        owner: i32,
+        name: &str,
+        signature: &str,
+        file: &Option<String>,
+        state: SignatureState,
+    ) -> Self {
+        Signature {
+            id: 0,
+            owner,
+            signature: signature.to_string(),
+            file: file.clone(),
+            state,
+            name: name.to_string(),
+        }
+    }
+
     /// Returns the total number of all signatures known to tenebrae on success
     pub fn count(connection: &PgConnection) -> Result<i64, diesel::result::Error> {
         use super::schema::signatures::dsl::*;
@@ -97,7 +114,6 @@ impl Signature {
             .execute(connection)
     }
 
-    #[cfg(debug_assertions)]
     /// Fetch a signature directly by id.
     pub fn fetch(id: i32, connection: &PgConnection) -> Result<Signature, diesel::result::Error> {
         signatures::table.find(id).first(connection)

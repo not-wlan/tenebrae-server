@@ -7,7 +7,7 @@ extern crate serde_derive;
 extern crate diesel;
 #[macro_use]
 extern crate diesel_derive_enum;
-use rocket::{catch, catchers, get, http::Status, post, routes, Request};
+use rocket::{catch, catchers, get, http::Status, post, routes, Request, put};
 use rocket_contrib::json::Json;
 
 use serde::Serialize;
@@ -16,7 +16,10 @@ mod database;
 mod schema;
 mod sql_types;
 
-use crate::{database::Connection, sql_types::Signature};
+use crate::{
+    database::Connection,
+    sql_types::{Signature, SignatureState},
+};
 
 #[derive(Serialize)]
 struct ServerStatus {
@@ -39,6 +42,13 @@ impl TenebraeError {
             errors: vec![message.to_string()],
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct TenebraeAdd {
+    name: String,
+    signature: String,
+    file: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -66,6 +76,11 @@ struct TenebraeSearchResult {
     signatures: Vec<TenebraeResult>,
 }
 
+#[catch(422)]
+fn illformed_request(_: &Request) -> Json<TenebraeError>{
+    Json(TenebraeError::new("Malformed request!"))
+}
+
 #[catch(500)]
 fn service_unavailable(_: &Request) -> Json<TenebraeError> {
     Json(TenebraeError::new("Service currently unavailable!"))
@@ -76,7 +91,7 @@ fn not_found(_: &Request) -> Json<TenebraeError> {
     Json(TenebraeError::new("The requested resource was not found!"))
 }
 
-#[post("/search", data = "<query>")]
+#[post("/signature", data = "<query>")]
 fn search(
     query: Json<TenebraeSearch>,
     connection: Connection,
@@ -88,6 +103,20 @@ fn search(
     }))
 }
 
+#[put("/signature", data = "<signature>")]
+fn add_signature(signature: Json<TenebraeAdd>, connection: Connection) -> Status {
+    let new = Signature::new(
+        0,
+        &signature.name,
+        &signature.signature,
+        &signature.file,
+        SignatureState::Normal,
+    );
+    new.persist(&connection)
+        .map(|_| Status::Ok)
+        .unwrap_or(Status::ServiceUnavailable)
+}
+
 #[get("/signature/<id>")]
 fn fetch(id: i32, connection: Connection) -> Result<Json<sql_types::Signature>, Status> {
     sql_types::Signature::fetch(id, &connection)
@@ -97,8 +126,7 @@ fn fetch(id: i32, connection: Connection) -> Result<Json<sql_types::Signature>, 
 
 #[get("/")]
 fn index(connection: Connection) -> Result<Json<ServerStatus>, Status> {
-    let signatures =
-        sql_types::Signature::count(&connection).map_err(|_| Status::ServiceUnavailable)?;
+    let signatures = Signature::count(&connection).map_err(|_| Status::ServiceUnavailable)?;
     Ok(Json(ServerStatus {
         motd: None,
         entries: signatures,
@@ -110,7 +138,7 @@ fn index(connection: Connection) -> Result<Json<ServerStatus>, Status> {
 fn main() {
     rocket::ignite()
         .manage(database::connect())
-        .register(catchers![not_found, service_unavailable])
-        .mount("/", routes![index, fetch, search])
+        .register(catchers![not_found, service_unavailable, illformed_request])
+        .mount("/", routes![index, fetch, search, add_signature])
         .launch();
 }

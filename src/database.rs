@@ -10,8 +10,7 @@ use rocket::{
     request::{self, FromRequest},
     Outcome, Request, State,
 };
-use std::{fs::File, io::Write, ops::Deref, path::Path};
-use std::error::Error;
+use std::{error::Error, fs::File, io::Write, ops::Deref, path::Path};
 
 const DEFAULT_USERNAME: &str = "badmin";
 
@@ -19,10 +18,10 @@ struct DatabaseError {
     pub message: String,
 }
 
-impl <E: Error>From<E> for DatabaseError {
+impl<E: Error> From<E> for DatabaseError {
     fn from(err: E) -> Self {
         DatabaseError {
-            message: format!("{:?}", err)
+            message: format!("{:?}", err),
         }
     }
 }
@@ -63,7 +62,9 @@ pub fn connect() -> PostgresPool {
         .expect("Failed to connect to the database. Please check the connection string!");
 
     if let Ok(connection) = pool.get() {
-        setup_database(&connection).map_err(|e| format!("Failed to setup default values! Error: {}", e.message)).unwrap();
+        setup_database(&connection)
+            .map_err(|e| format!("Failed to setup default values! Error: {}", e.message))
+            .unwrap();
     }
 
     pool
