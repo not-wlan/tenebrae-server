@@ -8,6 +8,7 @@ CREATE TABLE api_keys (
   state api_key_state NOT NULL,
   message VARCHAR
 );
+
 CREATE TABLE signatures (
     id SERIAL PRIMARY KEY,
     owner SERIAL REFERENCES api_keys(id) NOT NULL,
@@ -15,5 +16,8 @@ CREATE TABLE signatures (
     filename VARCHAR NOT NULL,
     filehash VARCHAR NOT NULL,
     state signature_state NOT NULL,
-    name VARCHAR NOT NULL
+    name VARCHAR NOT NULL,
+    index INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE UNIQUE INDEX unique_signature ON signatures (owner, signature, filehash, index);

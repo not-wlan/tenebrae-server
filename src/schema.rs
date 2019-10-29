@@ -11,6 +11,7 @@ table! {
     }
 }
 
+
 table! {
     use diesel::sql_types::*;
     use crate::sql_types::*;
@@ -23,7 +24,9 @@ table! {
         filehash -> Varchar,
         state -> Signature_state,
         name -> Varchar,
+        index -> Int4,
     }
+
 }
 
 joinable!(signatures -> api_keys (owner));

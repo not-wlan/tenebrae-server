@@ -45,9 +45,16 @@ impl TenebraeError {
 }
 
 #[derive(Serialize, Deserialize)]
-struct TenebraeAdd {
+struct TenebraeEntry {
     name: String,
     signature: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TenebraeAdd {
+    name: String,
+    apikey: String,
+    signatures: Vec<TenebraeEntry>,
     filename: String,
     filehash: String
 }
@@ -91,6 +98,11 @@ fn service_unavailable(_: &Request) -> Json<TenebraeError> {
     Json(TenebraeError::new("Service currently unavailable!"))
 }
 
+#[catch(403)]
+fn access_denied(_: &Request) -> Json<TenebraeError> {
+    Json(TenebraeError::new("Access denied!"))
+}
+
 #[catch(404)]
 fn not_found(_: &Request) -> Json<TenebraeError> {
     Json(TenebraeError::new("The requested resource was not found!"))
@@ -110,15 +122,18 @@ fn search(
 
 #[put("/signature", data = "<signature>")]
 fn add_signature(signature: Json<TenebraeAdd>, connection: Connection) -> Status {
-    let new = Signature::new(
-        0,
-        &signature.name,
-        &signature.signature,
-        &signature.filename,
-        &signature.filehash,
-        SignatureState::Normal,
-    );
-    new.persist(&connection)
+
+    if let Ok(demokey) = dotenv::var("TENEBRAE_KEY") {
+        if signature.apikey != demokey {
+            return Status::Forbidden;
+        }
+    }
+
+    let result = signature.signatures.iter().map(|sig| {
+        Signature::new(0, &sig.name, &sig.signature, &signature.filename, &signature.filehash, SignatureState::Normal)
+    }).collect::<Vec<_>>();
+
+    Signature::mass_insert(&result, &connection)
         .map(|_| Status::Ok)
         .unwrap_or(Status::ServiceUnavailable)
 }
@@ -144,7 +159,7 @@ fn index(connection: Connection) -> Result<Json<ServerStatus>, Status> {
 fn main() {
     rocket::ignite()
         .manage(database::connect())
-        .register(catchers![not_found, service_unavailable, illformed_request])
+        .register(catchers![not_found, service_unavailable, illformed_request, access_denied])
         .mount("/", routes![index, fetch, search, add_signature])
         .launch();
 }

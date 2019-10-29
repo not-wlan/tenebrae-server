@@ -1,6 +1,7 @@
 use super::schema::{api_keys, signatures};
 use diesel::{self, prelude::*, PgConnection};
 
+
 // Thanks to https://atsuzaki.com/blog/diesel-enums/
 
 #[PgType = "api_key_state"]
@@ -39,6 +40,7 @@ pub struct Signature {
     pub filename: String,
     state: SignatureState,
     pub name: String,
+    pub index: i32,
 }
 
 #[table_name = "api_keys"]
@@ -99,6 +101,7 @@ impl Signature {
             filehash: filehash.to_string(),
             state,
             name: name.to_string(),
+            index: 0,
         }
     }
 
@@ -106,6 +109,17 @@ impl Signature {
     pub fn count(connection: &PgConnection) -> Result<i64, diesel::result::Error> {
         use super::schema::signatures::dsl::*;
         signatures.count().get_result(connection)
+    }
+
+    pub fn mass_insert(sigs: &[Signature], connection: &PgConnection) -> Result<usize, diesel::result::Error> {
+        use super::schema::signatures::dsl::*;
+        use diesel::pg::upsert::*;
+        diesel::insert_into(super::schema::signatures::table)
+            .values(sigs)
+            .on_conflict(on_constraint("unique_signature"))
+            .do_update()
+            .set(index.eq(index + 1))
+            .execute(connection)
     }
 
     /// Persists a Signature to the Database. Returns the new id on success.
