@@ -27,7 +27,7 @@ impl<E: Error> From<E> for DatabaseError {
 }
 
 /// Our connection pool type
-type PostgresPool = Pool<ConnectionManager<PgConnection>>;
+pub type PostgresPool = Pool<ConnectionManager<PgConnection>>;
 
 pub struct Connection(pub PooledConnection<ConnectionManager<PgConnection>>);
 

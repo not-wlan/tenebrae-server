@@ -1,6 +1,9 @@
-use super::schema::{api_keys, signatures};
+use super::{
+    database::PostgresPool,
+    schema::{api_keys, signatures},
+};
 use diesel::{self, prelude::*, PgConnection};
-
+use rocket::{http::Status, request, request::FromRequest, Outcome, Request, State};
 
 // Thanks to https://atsuzaki.com/blog/diesel-enums/
 
@@ -53,6 +56,23 @@ pub struct ApiKey {
     message: Option<String>,
 }
 
+impl<'a, 'r> FromRequest<'a, 'r> for ApiKey {
+    type Error = ();
+
+    fn from_request(request: &'a Request<'r>) -> request::Outcome<ApiKey, Self::Error> {
+        if let Some(key) = request.cookies().get("apikey").and_then(|k| k.value_raw()) {
+            let pool = request.guard::<State<PostgresPool>>()?;
+
+            if let Ok(conn) = pool.get() {
+                return ApiKey::get_api_key(key, &conn)
+                    .and_then(|key| Ok(Outcome::Success(key)))
+                    .unwrap_or(Outcome::Failure((Status::ServiceUnavailable, ())));
+            }
+        }
+        Outcome::Failure((Status::ServiceUnavailable, ()))
+    }
+}
+
 impl ApiKey {
     pub fn new(name: &str, state: ApiKeyState, message: Option<String>) -> Self {
         use rand::Rng;
@@ -65,6 +85,14 @@ impl ApiKey {
             state,
             message,
         }
+    }
+
+    pub fn get_api_key(
+        rawkey: &str,
+        connection: &PgConnection,
+    ) -> Result<Self, diesel::result::Error> {
+        use super::schema::api_keys::dsl::*;
+        api_keys.filter(key.eq(rawkey)).first(connection)
     }
 
     pub fn count_master_keys(connection: &PgConnection) -> Result<i64, diesel::result::Error> {
@@ -111,7 +139,10 @@ impl Signature {
         signatures.count().get_result(connection)
     }
 
-    pub fn mass_insert(sigs: &[Signature], connection: &PgConnection) -> Result<usize, diesel::result::Error> {
+    pub fn mass_insert(
+        sigs: &[Signature],
+        connection: &PgConnection,
+    ) -> Result<usize, diesel::result::Error> {
         use super::schema::signatures::dsl::*;
         use diesel::pg::upsert::*;
         diesel::insert_into(super::schema::signatures::table)

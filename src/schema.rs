@@ -11,7 +11,6 @@ table! {
     }
 }
 
-
 table! {
     use diesel::sql_types::*;
     use crate::sql_types::*;
@@ -31,7 +30,4 @@ table! {
 
 joinable!(signatures -> api_keys (owner));
 
-allow_tables_to_appear_in_same_query!(
-    api_keys,
-    signatures,
-);
+allow_tables_to_appear_in_same_query!(api_keys, signatures,);

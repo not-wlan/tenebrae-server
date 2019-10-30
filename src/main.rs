@@ -7,7 +7,7 @@ extern crate serde_derive;
 extern crate diesel;
 #[macro_use]
 extern crate diesel_derive_enum;
-use rocket::{catch, catchers, get, http::Status, post, routes, Request, put};
+use rocket::{catch, catchers, get, http::Status, post, put, routes, Request};
 use rocket_contrib::json::Json;
 
 use serde::Serialize;
@@ -20,6 +20,7 @@ use crate::{
     database::Connection,
     sql_types::{Signature, SignatureState},
 };
+use crate::sql_types::ApiKey;
 
 #[derive(Serialize)]
 struct ServerStatus {
@@ -53,10 +54,9 @@ struct TenebraeEntry {
 #[derive(Serialize, Deserialize)]
 struct TenebraeAdd {
     name: String,
-    apikey: String,
     signatures: Vec<TenebraeEntry>,
     filename: String,
-    filehash: String
+    filehash: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -69,7 +69,7 @@ struct TenebraeResult {
     name: String,
     signature: String,
     filename: String,
-    filehash: String
+    filehash: String,
 }
 
 impl From<&sql_types::Signature> for TenebraeResult {
@@ -78,7 +78,7 @@ impl From<&sql_types::Signature> for TenebraeResult {
             name: sig.name.clone(),
             signature: sig.signature.clone(),
             filename: sig.filename.clone(),
-            filehash: sig.filehash.clone()
+            filehash: sig.filehash.clone(),
         }
     }
 }
@@ -89,7 +89,7 @@ struct TenebraeSearchResult {
 }
 
 #[catch(422)]
-fn illformed_request(_: &Request) -> Json<TenebraeError>{
+fn illformed_request(_: &Request) -> Json<TenebraeError> {
     Json(TenebraeError::new("Malformed request!"))
 }
 
@@ -121,17 +121,28 @@ fn search(
 }
 
 #[put("/signature", data = "<signature>")]
-fn add_signature(signature: Json<TenebraeAdd>, connection: Connection) -> Status {
+fn add_signature(signature: Json<TenebraeAdd>, connection: Connection, key: ApiKey) -> Status {
 
     if let Ok(demokey) = dotenv::var("TENEBRAE_KEY") {
-        if signature.apikey != demokey {
+        if key.key != demokey{
             return Status::Forbidden;
         }
     }
 
-    let result = signature.signatures.iter().map(|sig| {
-        Signature::new(0, &sig.name, &sig.signature, &signature.filename, &signature.filehash, SignatureState::Normal)
-    }).collect::<Vec<_>>();
+    let result = signature
+        .signatures
+        .iter()
+        .map(|sig| {
+            Signature::new(
+                0,
+                &sig.name,
+                &sig.signature,
+                &signature.filename,
+                &signature.filehash,
+                SignatureState::Normal,
+            )
+        })
+        .collect::<Vec<_>>();
 
     Signature::mass_insert(&result, &connection)
         .map(|_| Status::Ok)
@@ -159,7 +170,12 @@ fn index(connection: Connection) -> Result<Json<ServerStatus>, Status> {
 fn main() {
     rocket::ignite()
         .manage(database::connect())
-        .register(catchers![not_found, service_unavailable, illformed_request, access_denied])
+        .register(catchers![
+            not_found,
+            service_unavailable,
+            illformed_request,
+            access_denied
+        ])
         .mount("/", routes![index, fetch, search, add_signature])
         .launch();
 }
