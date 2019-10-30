@@ -145,7 +145,7 @@ fn add_signature(signature: Json<TenebraeAdd>, connection: Connection, key: ApiK
 
     Signature::mass_insert(&result, &connection)
         .map(|_| Status::Ok)
-        .unwrap_or(Status::ServiceUnavailable)
+        .unwrap_or(Status::BadRequest)
 }
 
 #[get("/signature/<id>")]
