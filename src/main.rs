@@ -53,7 +53,6 @@ struct TenebraeEntry {
 
 #[derive(Serialize, Deserialize)]
 struct TenebraeAdd {
-    name: String,
     signatures: Vec<TenebraeEntry>,
     filename: String,
     filehash: String,
@@ -114,7 +113,7 @@ fn search(
     connection: Connection,
 ) -> Result<Json<TenebraeSearchResult>, Status> {
     let result = sql_types::Signature::search(&query.signatures, &connection)
-        .map_err(|_| Status::ServiceUnavailable)?;
+        .map_err(|_| Status::BadRequest)?;
     Ok(Json(TenebraeSearchResult {
         signatures: result.iter().map(TenebraeResult::from).collect(),
     }))
