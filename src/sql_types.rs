@@ -3,7 +3,9 @@ use super::{
     schema::{api_keys, signatures},
 };
 use diesel::{self, prelude::*, PgConnection};
-use rocket::{http::Status, request, request::FromRequest, Outcome, Request, State};
+use rocket::{
+    http::Status, outcome::IntoOutcome, request, request::FromRequest, Outcome, Request, State,
+};
 
 // Thanks to https://atsuzaki.com/blog/diesel-enums/
 
@@ -21,17 +23,6 @@ pub enum ApiKeyState {
     Moderator,
 }
 
-#[PgType = "signature_state"]
-#[DieselType = "Signature_state"]
-#[derive(Debug, PartialEq, DbEnum, Serialize, Deserialize)]
-pub enum SignatureState {
-    #[db_rename = "unverified"]
-    Unverified,
-    #[db_rename = "outdated"]
-    Outdated,
-    #[db_rename = "normal"]
-    Normal,
-}
 
 #[table_name = "signatures"]
 #[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset)]
@@ -41,15 +32,13 @@ pub struct Signature {
     pub signature: String,
     pub filehash: String,
     pub filename: String,
-    state: SignatureState,
     pub name: String,
-    pub index: i32,
 }
 
 #[table_name = "api_keys"]
 #[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset)]
 pub struct ApiKey {
-    id: i32,
+    pub id: i32,
     pub name: String,
     pub key: String,
     state: ApiKeyState,
@@ -60,16 +49,18 @@ impl<'a, 'r> FromRequest<'a, 'r> for ApiKey {
     type Error = ();
 
     fn from_request(request: &'a Request<'r>) -> request::Outcome<ApiKey, Self::Error> {
-        if let Some(key) = request.cookies().get("apikey").and_then(|k| k.value_raw()) {
-            let pool = request.guard::<State<PostgresPool>>()?;
+        let pool = request.guard::<State<PostgresPool>>()?;
 
-            if let Ok(conn) = pool.get() {
-                return ApiKey::get_api_key(key, &conn)
-                    .and_then(|key| Ok(Outcome::Success(key)))
-                    .unwrap_or(Outcome::Failure((Status::ServiceUnavailable, ())));
-            }
+        if let Ok(conn) = pool.get() {
+            return request
+                .cookies()
+                .get("apikey")
+                .map(|cookie| cookie.value())
+                .and_then(|key| ApiKey::get_api_key(&key, &conn).ok())
+                .into_outcome((Status::Forbidden, ()));
         }
-        Outcome::Failure((Status::ServiceUnavailable, ()))
+
+        Outcome::Failure((Status::Forbidden, ()))
     }
 }
 
@@ -118,8 +109,7 @@ impl Signature {
         name: &str,
         signature: &str,
         filename: &str,
-        filehash: &str,
-        state: SignatureState,
+        filehash: &str
     ) -> Self {
         Signature {
             id: 0,
@@ -127,9 +117,7 @@ impl Signature {
             signature: signature.to_string(),
             filename: filename.to_string(),
             filehash: filehash.to_string(),
-            state,
             name: name.to_string(),
-            index: 0,
         }
     }
 
@@ -147,9 +135,6 @@ impl Signature {
         use diesel::pg::upsert::*;
         diesel::insert_into(super::schema::signatures::table)
             .values(sigs)
-            .on_conflict(on_constraint("unique_signature"))
-            .do_update()
-            .set(index.eq(index + 1))
             .execute(connection)
     }
 
@@ -160,6 +145,13 @@ impl Signature {
             .values(self)
             .returning(id)
             .execute(connection)
+    }
+
+    pub fn fetch_file(hash: &str, connection: &PgConnection) -> Result<Vec<Signature>, diesel::result::Error> {
+        use super::schema::signatures::dsl::*;
+        use diesel::dsl::*;
+        signatures.filter(filehash.eq(hash))
+            .load::<Signature>(connection)
     }
 
     /// Fetch a signature directly by id.

@@ -7,20 +7,21 @@ extern crate serde_derive;
 extern crate diesel;
 #[macro_use]
 extern crate diesel_derive_enum;
-use rocket::{catch, catchers, get, http::Status, post, put, routes, Request};
+use rocket::{catchers, get, http::Status, post, put, routes};
 use rocket_contrib::json::Json;
 
 use serde::Serialize;
 
 mod database;
+mod error;
 mod schema;
 mod sql_types;
 
 use crate::{
     database::Connection,
-    sql_types::{Signature, SignatureState},
+    error::*,
+    sql_types::{ApiKey, Signature},
 };
-use crate::sql_types::ApiKey;
 
 #[derive(Serialize)]
 struct ServerStatus {
@@ -28,21 +29,6 @@ struct ServerStatus {
     entries: i64,
     version: String,
     errors: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct TenebraeError {
-    version: String,
-    errors: Vec<String>,
-}
-
-impl TenebraeError {
-    pub fn new(message: &str) -> Self {
-        TenebraeError {
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            errors: vec![message.to_string()],
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -87,26 +73,6 @@ struct TenebraeSearchResult {
     signatures: Vec<TenebraeResult>,
 }
 
-#[catch(422)]
-fn illformed_request(_: &Request) -> Json<TenebraeError> {
-    Json(TenebraeError::new("Malformed request!"))
-}
-
-#[catch(500)]
-fn service_unavailable(_: &Request) -> Json<TenebraeError> {
-    Json(TenebraeError::new("Service currently unavailable!"))
-}
-
-#[catch(403)]
-fn access_denied(_: &Request) -> Json<TenebraeError> {
-    Json(TenebraeError::new("Access denied!"))
-}
-
-#[catch(404)]
-fn not_found(_: &Request) -> Json<TenebraeError> {
-    Json(TenebraeError::new("The requested resource was not found!"))
-}
-
 #[post("/signature", data = "<query>")]
 fn search(
     query: Json<TenebraeSearch>,
@@ -121,24 +87,16 @@ fn search(
 
 #[put("/signature", data = "<signature>")]
 fn add_signature(signature: Json<TenebraeAdd>, connection: Connection, key: ApiKey) -> Status {
-
-    if let Ok(demokey) = dotenv::var("TENEBRAE_KEY") {
-        if key.key != demokey{
-            return Status::Forbidden;
-        }
-    }
-
     let result = signature
         .signatures
         .iter()
         .map(|sig| {
             Signature::new(
-                0,
+                key.id,
                 &sig.name,
                 &sig.signature,
                 &signature.filename,
-                &signature.filehash,
-                SignatureState::Normal,
+                &signature.filehash
             )
         })
         .collect::<Vec<_>>();
