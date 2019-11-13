@@ -47,8 +47,4 @@ table! {
 joinable!(signature_history -> api_keys (owner));
 joinable!(signatures -> api_keys (owner));
 
-allow_tables_to_appear_in_same_query!(
-    api_keys,
-    signature_history,
-    signatures,
-);
+allow_tables_to_appear_in_same_query!(api_keys, signature_history, signatures,);

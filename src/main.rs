@@ -85,6 +85,14 @@ fn search(
     }))
 }
 
+#[get("/signature/byfile?<hash>")]
+fn find_by_hash(hash: String, connection: Connection) -> Result<Json<TenebraeSearchResult>, Status> {
+    let result = Signature::by_hash(&hash, &connection).map_err(|_| Status::ServiceUnavailable)?;
+    Ok(Json(TenebraeSearchResult {
+        signatures: result.iter().map(TenebraeResult::from).collect(),
+    }))
+}
+
 #[put("/signature", data = "<signature>")]
 fn add_signature(signature: Json<TenebraeAdd>, connection: Connection, key: ApiKey) -> Status {
     let result = signature
@@ -96,21 +104,14 @@ fn add_signature(signature: Json<TenebraeAdd>, connection: Connection, key: ApiK
                 &sig.name,
                 &sig.signature,
                 &signature.filename,
-                &signature.filehash
+                &signature.filehash,
             )
         })
         .collect::<Vec<_>>();
 
-    Signature::mass_insert(&result, &connection)
+    Signature::persist_data(&result, &connection)
         .map(|_| Status::Ok)
         .unwrap_or(Status::BadRequest)
-}
-
-#[get("/signature/<id>")]
-fn fetch(id: i32, connection: Connection) -> Result<Json<sql_types::Signature>, Status> {
-    sql_types::Signature::fetch(id, &connection)
-        .map_err(|_| Status::NotFound)
-        .map(Json)
 }
 
 #[get("/")]
@@ -133,6 +134,6 @@ fn main() {
             illformed_request,
             access_denied
         ])
-        .mount("/", routes![index, fetch, search, add_signature])
+        .mount("/", routes![index, search, add_signature])
         .launch();
 }

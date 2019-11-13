@@ -2,7 +2,12 @@ use super::{
     database::PostgresPool,
     schema::{api_keys, signatures},
 };
-use diesel::{self, prelude::*, PgConnection};
+use diesel::{
+    self,
+    pg::upsert::{excluded, on_constraint},
+    prelude::*,
+    PgConnection,
+};
 use rocket::{
     http::Status, outcome::IntoOutcome, request, request::FromRequest, Outcome, Request, State,
 };
@@ -22,7 +27,6 @@ pub enum ApiKeyState {
     #[db_rename = "moderator"]
     Moderator,
 }
-
 
 #[table_name = "signatures"]
 #[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset)]
@@ -104,20 +108,20 @@ impl ApiKey {
 }
 
 impl Signature {
-    pub fn new(
+    pub fn new<S: Into<String>>(
         owner: i32,
-        name: &str,
-        signature: &str,
-        filename: &str,
-        filehash: &str
+        name: S,
+        signature: S,
+        filename: S,
+        filehash: S,
     ) -> Self {
         Signature {
             id: 0,
             owner,
-            signature: signature.to_string(),
-            filename: filename.to_string(),
-            filehash: filehash.to_string(),
-            name: name.to_string(),
+            signature: signature.into(),
+            filename: filename.into(),
+            filehash: filehash.into(),
+            name: name.into(),
         }
     }
 
@@ -127,32 +131,26 @@ impl Signature {
         signatures.count().get_result(connection)
     }
 
-    pub fn mass_insert(
+    pub fn persist_data(
         sigs: &[Signature],
         connection: &PgConnection,
     ) -> Result<usize, diesel::result::Error> {
         use super::schema::signatures::dsl::*;
-        use diesel::pg::upsert::*;
         diesel::insert_into(super::schema::signatures::table)
             .values(sigs)
+            .on_conflict(on_constraint("unique_signature"))
+            .do_update()
+            .set(name.eq(excluded(name)))
             .execute(connection)
     }
 
-    /// Persists a Signature to the Database. Returns the new id on success.
-    pub fn persist(&self, connection: &PgConnection) -> Result<usize, diesel::result::Error> {
+    pub fn by_hash(hash: &str, connection: &PgConnection) -> Result<Vec<Signature>, diesel::result::Error> {
         use super::schema::signatures::dsl::*;
-        diesel::insert_into(super::schema::signatures::table)
-            .values(self)
-            .returning(id)
-            .execute(connection)
-    }
-
-    pub fn fetch_file(hash: &str, connection: &PgConnection) -> Result<Vec<Signature>, diesel::result::Error> {
-        use super::schema::signatures::dsl::*;
-        use diesel::dsl::*;
-        signatures.filter(filehash.eq(hash))
+        signatures
+            .filter(filehash.eq(hash))
             .load::<Signature>(connection)
     }
+
 
     /// Fetch a signature directly by id.
     pub fn fetch(id: i32, connection: &PgConnection) -> Result<Signature, diesel::result::Error> {
