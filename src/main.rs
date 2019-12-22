@@ -7,16 +7,21 @@ extern crate serde_derive;
 extern crate diesel;
 #[macro_use]
 extern crate diesel_derive_enum;
-use rocket::{get, http::Status, routes};
+use rocket::{catchers, get, http::Status, post, put, routes};
 use rocket_contrib::json::Json;
 
 use serde::Serialize;
 
 mod database;
+mod error;
 mod schema;
 mod sql_types;
 
-use crate::database::Connection;
+use crate::{
+    database::Connection,
+    error::*,
+    sql_types::{ApiKey, Signature},
+};
 
 #[derive(Serialize)]
 struct ServerStatus {
@@ -26,10 +31,92 @@ struct ServerStatus {
     errors: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct TenebraeEntry {
+    name: String,
+    signature: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TenebraeAdd {
+    signatures: Vec<TenebraeEntry>,
+    filename: String,
+    filehash: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TenebraeSearch {
+    signatures: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TenebraeResult {
+    name: String,
+    signature: String,
+    filename: String,
+    filehash: String,
+}
+
+impl From<&sql_types::Signature> for TenebraeResult {
+    fn from(sig: &Signature) -> Self {
+        TenebraeResult {
+            name: sig.name.clone(),
+            signature: sig.signature.clone(),
+            filename: sig.filename.clone(),
+            filehash: sig.filehash.clone(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct TenebraeSearchResult {
+    signatures: Vec<TenebraeResult>,
+}
+
+#[post("/signature", data = "<query>")]
+fn search(
+    query: Json<TenebraeSearch>,
+    connection: Connection,
+) -> Result<Json<TenebraeSearchResult>, Status> {
+    let result = sql_types::Signature::search(&query.signatures, &connection)
+        .map_err(|_| Status::BadRequest)?;
+    Ok(Json(TenebraeSearchResult {
+        signatures: result.iter().map(TenebraeResult::from).collect(),
+    }))
+}
+
+#[get("/signature/byfile?<hash>")]
+fn find_by_hash(hash: String, connection: Connection) -> Result<Json<TenebraeSearchResult>, Status> {
+    let result = Signature::by_hash(&hash, &connection).map_err(|_| Status::ServiceUnavailable)?;
+    Ok(Json(TenebraeSearchResult {
+        signatures: result.iter().map(TenebraeResult::from).collect(),
+    }))
+}
+
+#[put("/signature", data = "<signature>")]
+fn add_signature(signature: Json<TenebraeAdd>, connection: Connection, key: ApiKey) -> Status {
+    let result = signature
+        .signatures
+        .iter()
+        .map(|sig| {
+            Signature::new(
+                key.id,
+                &sig.name,
+                &sig.signature,
+                &signature.filename,
+                &signature.filehash,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    Signature::persist_data(&result, &connection)
+        .map(|_| Status::Ok)
+        .unwrap_or(Status::BadRequest)
+}
+
 #[get("/")]
 fn index(connection: Connection) -> Result<Json<ServerStatus>, Status> {
-    let signatures =
-        sql_types::Signature::count(&connection).map_err(|_| Status::ServiceUnavailable)?;
+    let signatures = Signature::count(&connection).map_err(|_| Status::ServiceUnavailable)?;
     Ok(Json(ServerStatus {
         motd: None,
         entries: signatures,
@@ -41,6 +128,12 @@ fn index(connection: Connection) -> Result<Json<ServerStatus>, Status> {
 fn main() {
     rocket::ignite()
         .manage(database::connect())
-        .mount("/", routes![index])
+        .register(catchers![
+            not_found,
+            service_unavailable,
+            illformed_request,
+            access_denied
+        ])
+        .mount("/", routes![index, search, add_signature])
         .launch();
 }
